@@ -1,0 +1,18 @@
+{
+    "name": "Icredibanco",
+    "alias": "icredibanco",
+    "description": "CrediBanco- PaymentMethod Form",
+    "keywords": [],
+    "version": "1.0.0",
+    "active": 1,
+    "order": 1,
+    "providers": [
+        "Modules\\Icredibanco\\Providers\\IcredibancoServiceProvider",
+        "Modules\\Icredibanco\\Providers\\RouteServiceProvider"
+    ],
+    "aliases": {},
+    "files": [
+        
+    ],
+    "requires": []
+}
