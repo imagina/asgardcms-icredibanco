@@ -1,4 +1,4 @@
-# asgardcms-icommercecredibanco
+# asgardcms-icredibanco (BTN)
 
 ### Requires
 
@@ -25,9 +25,11 @@
 		idMENU = Menu identifier
 		nLI = Position of the MENU ITEM where you want to add the event (li:nth-child)
 
+		=============================================
 		Example Code Html FrontEnd Partials Header:
 			
 			<div id = "menu>
 				@include('partials.navigation')
 			</div>
+		=============================================
 	
