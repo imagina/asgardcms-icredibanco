@@ -25,6 +25,9 @@
 		idMENU = Menu identifier
 		nLI = Position of the MENU ITEM where you want to add the event (li:nth-child)
 
-
-Good luck :D
+		Example Code Html FrontEnd Partials Header:
+			
+			<div id = "menu>
+				@include('partials.navigation')
+			</div>
 	
