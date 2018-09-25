@@ -20,4 +20,9 @@ use Illuminate\Routing\Router;
             'uses' => 'PublicController@confirmation',
         ]);
 
+        $router->get('voucher/transaction/{tr}/{or}', [
+            'as' => 'icredibanco.voucher.showvoucher',
+            'uses' => 'PublicController@voucherShow',
+        ]);
+
     });

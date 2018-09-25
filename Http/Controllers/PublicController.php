@@ -6,6 +6,7 @@ use Mockery\CountValidator\Exception;
 
 use Modules\IcommerceCredibanco\Entities\Credibanco;
 use Modules\IcommerceCredibanco\Entities\Configcredibanco;
+use Modules\IcommerceCredibanco\Repositories\TransactionRepository;
 
 use Modules\Core\Http\Controllers\BasePublicController;
 use Route;
@@ -38,7 +39,9 @@ class PublicController extends BasePublicController
     protected $urlSandbox;
     protected $urlProduction;
 
-    public function __construct(Setting $setting, Authentication $auth, UserRepository $user)
+    protected $transaction;
+
+    public function __construct(Setting $setting, Authentication $auth, UserRepository $user,TransactionRepository $transaction)
     {
 
         $this->setting = $setting;
@@ -48,6 +51,7 @@ class PublicController extends BasePublicController
         $this->urlSandbox = "https://testecommerce.credibanco.com/vpos2/MM/transactionStart20.do";
         $this->urlProduction = "https://ecommerce.credibanco.com/vpos2/MM/transactionStart20.do";
 
+        $this->transaction = $transaction;
     }
 
     /**
@@ -249,14 +253,13 @@ class PublicController extends BasePublicController
         
             $userFirstname = "{$firstName} {$lastName}";
 
-
             if( $arrayOut['authorizationResult'] == "00" ) {
             /* 00, indica que la transacción ha sido autorizada. Ejemplo errorCode: 00 errorMessage . Aprobada */
                
                 $msjTheme = "icredibanco::email.success_order";
                 $msjSubject = trans('icommerce::common.emailSubject.complete')."- Order:".$orderID;
                 $msjIntro = trans('icommerce::common.emailIntro.complete');
-                $state = 1;
+                $state = 12;
                
             }else{
 
@@ -309,12 +312,26 @@ class PublicController extends BasePublicController
                
             icommerce_emailSend(['email_from'=>[$email_from],'theme' => $msjTheme,'email_to' => $userEmail,'subject' => $msjSubject, 'sender'=>$sender,'data' => array('title' => $msjSubject,'intro'=> $msjIntro,'content'=>$content)]);
                 
-                
             icommerce_emailSend(['email_from'=>[$email_from],'theme' => $msjTheme,'email_to' => $email_to,'subject' => $msjSubject, 'sender'=>$sender,'data' => array('title' => $msjSubject,'intro'=> $msjIntro,'content'=>$content)]);
                 
+            $order = array(
+                "id" =>  $orderID,
+                "status" => $state,
+                "dateOperation" => date("Y-m-d H:i:s"),
+                "total" => $arrayOut["purchaseAmount"],
+                "tax" => 0
+            );
 
-            return redirect()->route('homepage');
+            $transaction = $this->generateVoucher($order,$arrayOut,2,$config);
+            $commerceName  = $this->setting->get('core::site-name');
 
+            $tr = $this->hashData($transaction->id);
+            $or = $this->hashData($orderID);
+
+            //$tr = $this->hashDataTest($transaction->id,'e');
+            //$or = $this->hashDataTest($orderID,'e');
+
+            return redirect()->route('icredibanco.voucher.showvoucher', [$tr, $or]);
            
         }catch (Exception $e) {
 
@@ -353,6 +370,115 @@ class PublicController extends BasePublicController
         if($currency=="USD")
             return 840;
 
+    }
+
+      /**
+     * Generate Voucher
+     * @param  $order
+     * @param  $arrayOut
+     * @param  $type (1 = IcommerceCredibanco , 2 = Icredibanco)
+     * @param  $config
+     * @return transaction
+     */
+    public function generateVoucher($order,$arrayOut,$type,$config){
+        
+        $data = array(
+           'order_id' => $order["id"],
+           'order_status' => $order["status"],
+           'type' => $type,
+           'commerceId' => $arrayOut['commerceId'],
+           'operationDate' => $order["dateOperation"],
+           'terminalCode' => $arrayOut['purchaseTerminalCode'],
+           'operationNumber' => $arrayOut['purchaseOperationNumber'],
+            'currency' =>  $config->currency,
+            'amount' => $order["total"],
+            'tax' => $order["tax"],
+            'description' => $arrayOut['additionalObservations'],
+            'errorCode' => $arrayOut['errorCode'],
+            'errorMessage' => $arrayOut['errorMessage'],
+            'authorizationCode' => isset($arrayOut['authorizationCode'])?$arrayOut['authorizationCode']:'',
+            'authorizationResult' => $arrayOut['authorizationResult']
+        );
+
+       $transaction = $this->transaction->create($data);
+
+       return $transaction;
+
+    }
+
+     /**
+     * Show Voucher
+     * @param  $request
+     * @return view
+     */
+    public function voucherShow(Requests $request){
+        
+        if(isset($request->tr) && isset($request->or)){
+           
+            
+            $tranID = $this->dehashData($request->tr);
+            $orderID = $this->dehashData($request->or);
+            //$tranID = $this->hashDataTest($request->tr,'d');
+            //$orderID = $this->hashDataTest($request->or,'d');
+            
+            $transaction = $this->transaction->findByOrderTrans($orderID,$tranID);
+
+            if(!empty($transaction))
+                $commerceName  = $this->setting->get('core::site-name');
+            else
+                return redirect()->route('homepage');
+           
+        }else{
+           return redirect()->route('homepage');
+        }
+        
+        $tpl ='icommercecredibanco::frontend.index';
+        return view($tpl, compact('transaction','commerceName'));
+
+    }
+
+     /**
+     * Encode
+     * @param $data
+     * @return data
+     */
+    public function hashData($data){
+        return base64_encode($data);
+    }
+
+    /**
+     * Decode
+     * @param $data
+     * @return data
+     */
+    public function dehashData($data){
+        return base64_decode($data);
+    }
+
+
+     /**
+     * Encode - Decode
+     * @param $data
+     * @return data
+     */
+    public function hashDataTest( $string, $action = 'e' ) {
+        // you may change these values to your own
+        $secret_key = 'kawabonga';
+        $secret_iv = 'kawabonga';
+     
+        $output = false;
+        $encrypt_method = "AES-256-CBC";
+        $key = hash( 'sha256', $secret_key );
+        $iv = substr( hash( 'sha256', $secret_iv ), 0, 16 );
+     
+        if( $action == 'e' ) {
+            $output = base64_encode( openssl_encrypt( $string, $encrypt_method, $key, 0, $iv ) );
+        }
+        else if( $action == 'd' ){
+            $output = openssl_decrypt( base64_decode( $string ), $encrypt_method, $key, 0, $iv );
+        }
+     
+        return $output;
     }
 
 }
